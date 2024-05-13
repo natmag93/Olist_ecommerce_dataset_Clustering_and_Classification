@@ -34,11 +34,13 @@ Dataset Link: [https://www.kaggle.com/olistbr/brazilian-ecommerce](https://www.k
 
 tools used: Power Bi, Python (pandas), R (tidyverse, smotefamily, e1071, rpart, factoextra)
 
-## Data understanding
+## In this repository
 
-## Data preparation
+- Dashboard for data profiling
+- Scripts
+- html files
+- tables (raw and processed data)
 
-## Modeling
 
 ## Evaluation
 
@@ -62,3 +64,14 @@ It is also important to note that some limitations regarding data were found. Th
 
 Alternative outcomes could be explored for customer segmentation using different approaches, including: the creation of other features, application of other clustering algorithms (e.g., Hierarchical clustering or Gaussian Mixture Models), use of other clustering evaluation metrics (e.g., Dunn index or Fowlkes-Mallows index), and use different techniques for normalization, dimensionality reduction (i.e., PCA), detection and treatment of outliers and missing values.
 The prediction of customers return could also be carried out using different classification models (e.g., xgboost). Other features could be created, including ones related to client’s reviews.
+
+
+## Authors
+
+Francisco Leite
+Gonçalo Silva
+[Natalia Magalhaes](https://github.com/natmag93)
+[Zita Martins](https://github.com/zitasamartins)
+
+
+Feel free to contact us!
