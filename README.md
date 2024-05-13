@@ -59,5 +59,6 @@ The model selected for classification of returned customers had an acceptable pe
 It is also important to note that some limitations regarding data were found. This includes a low number of customers who returned (1.6%) vs not returned (98.4%), as well as having some variable with a high dispersion. Moreover, available variables might not be enough to understand (predict) what made customers return.
 
 **Future Work**
+
 Alternative outcomes could be explored for customer segmentation using different approaches, including: the creation of other features, application of other clustering algorithms (e.g., Hierarchical clustering or Gaussian Mixture Models), use of other clustering evaluation metrics (e.g., Dunn index or Fowlkes-Mallows index), and use different techniques for normalization, dimensionality reduction (i.e., PCA), detection and treatment of outliers and missing values.
 The prediction of customers return could also be carried out using different classification models (e.g., xgboost). Other features could be created, including ones related to client’s reviews.
