@@ -42,9 +42,14 @@ tools used: Power Bi, Python (pandas), R (tidyverse, smotefamily, e1071, rpart, 
 
 ## Evaluation
 
-https://github.com/natmag93/Olist_ecommerce_dataset_Clustering_and_Classification/blob/97027db4915dca2a64765a3f7d1f54f0d02b0477/evalution_kmeans.png
 
-https://github.com/natmag93/Olist_ecommerce_dataset_Clustering_and_Classification/blob/97027db4915dca2a64765a3f7d1f54f0d02b0477/evalution_classification.png
+![enter image description here](https://github.com/natmag93/Olist_ecommerce_dataset_Clustering_and_Classification/blob/97027db4915dca2a64765a3f7d1f54f0d02b0477/evalution_kmeans.png)
+
+
+
+![enter image description here](https://github.com/natmag93/Olist_ecommerce_dataset_Clustering_and_Classification/blob/97027db4915dca2a64765a3f7d1f54f0d02b0477/evalution_classification.png)
+
+
 
 
 ## Conclusions 
