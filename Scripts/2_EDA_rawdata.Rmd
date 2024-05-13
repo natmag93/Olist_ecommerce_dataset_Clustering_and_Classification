@@ -1,0 +1,504 @@
+---
+title: "EDA Raw Data"
+output: html_document
+date: "2024-03-23"
+---
+
+
+
+# 1. LIBRARIES
+
+```{r}
+rm(list = ls())
+graphics.off()
+
+library(dplyr)
+library(xlsx)
+library(readxl)
+library(plyr)
+library(dplyr)
+library(tidyr)
+library(readr)
+library(ggplot2)
+library(reshape2)
+library(forcats)
+library(ggcorrplot)
+library(vcd)
+
+```
+
+
+# 2. EXPLORE ORIGINAL DATASETS
+## 2.1. Load datasets
+
+```{r}
+
+dim_customer <- read.csv(file.path("tables_raw_data", "dim_customers.csv")) %>% as.data.frame()
+dim_payments <- read.csv(file.path("tables_raw_data", "dim_payments.csv")) %>% as.data.frame()
+dim_products <- read.csv(file.path("tables_raw_data", "dim_products.csv")) %>% as.data.frame()
+fct_orders_item <- read.csv(file.path("tables_raw_data", "fct_order_items.csv")) %>% as.data.frame()
+fct_orders <- read.csv(file.path("tables_raw_data", "fct_orders.csv")) %>% as.data.frame()
+
+```
+
+
+## 2.2. Check dataframes
+
+```{r}
+str(fct_orders)
+str(fct_orders_item)
+str(dim_customer)
+str(dim_products)
+str(dim_payments)
+```
+
+
+
+## 2.3.EDA
+### 2.3.1.Missing values
+
+```{r}
+# fct_orders
+colSums(is.na(fct_orders)) %>% as.data.frame
+
+# fct_orders_item
+colSums(is.na(fct_orders_item)) %>% as.data.frame
+
+# dim_customer
+colSums(is.na(dim_customer)) %>% as.data.frame
+
+# dim_products
+colSums(is.na(dim_products)) %>% as.data.frame
+
+# dim_payments
+colSums(is.na(dim_payments)) %>% as.data.frame
+
+```
+**Comments:** Missing values were only found in dim_products..
+
+
+
+### 2.3.2. Distribution of variables' values
+#### 2.3.2.1. fct_orders
+```{r}
+# convert POSIXct to Date
+fct_orders$order_approved_at<- as.Date(fct_orders$order_approved_at)
+fct_orders$order_delivered_carrier_date <- as.Date(fct_orders$order_delivered_carrier_date)
+fct_orders$order_delivered_customer_date <- as.Date(fct_orders$order_delivered_customer_date)
+fct_orders$order_estimated_delivery_date <- as.Date(fct_orders$order_estimated_delivery_date)
+fct_orders$order_purchase_timestamp <- as.Date(fct_orders$order_purchase_timestamp)
+
+# Histogram --------------------------------------------------------------
+ggplot(data=fct_orders, aes(x=order_approved_at)) +
+ geom_histogram(fill="steelblue", color="black", bin=40) +
+ ggtitle("Histogram of order_approved_at")
+
+ggplot(data=fct_orders, aes(x=order_delivered_carrier_date)) +
+ geom_histogram(fill="steelblue", color="black", bin=40) +
+ ggtitle("Histogram of order_delivered_carrier_date")
+
+ggplot(data=fct_orders, aes(x=order_delivered_customer_date)) +
+ geom_histogram(fill="steelblue", color="black", bin=40) +
+ ggtitle("Histogram of order_delivered_customer_date")
+
+ggplot(data=fct_orders, aes(x=order_estimated_delivery_date)) +
+ geom_histogram(fill="steelblue", color="black", bin=40) +
+ ggtitle("Histogram of order_estimated_delivery_date")
+
+ggplot(data=fct_orders, aes(x=order_purchase_timestamp )) +
+ geom_histogram(fill="steelblue", color="black", bin=40) +
+ ggtitle("Histogram of order_purchase_timestamp")
+
+
+# Boxplots --------------------------------------------------------------
+boxplot(fct_orders$order_approved_at,
+  ylab = "order_approved_at")
+
+boxplot(fct_orders$order_delivered_carrier_date,
+  ylab = "order_delivered_carrier_date")
+
+boxplot(fct_orders$order_delivered_customer_date,
+  ylab = "order_delivered_customer_date")
+
+boxplot(fct_orders$order_estimated_delivery_date,
+  ylab = "order_estimated_delivery_date")
+
+boxplot(fct_orders$order_purchase_timestamp,
+  ylab = "order_purchase_timestam")
+
+
+# Frequency --------------------------------------------------------------
+# Compute the frequency
+order_status <- fct_orders %>%
+        group_by(order_status) %>%
+        dplyr::summarise(counts = n()) %>% 
+        arrange(desc(counts))
+
+
+# Create the bar plot
+ggplot(order_status, aes(x =fct_reorder(order_status, -counts, max), y = counts)) +
+  geom_bar(fill = "#0073C2FF", stat = "identity") +
+  geom_text(aes(label = counts), vjust = -0.3) + 
+  scale_x_discrete(guide = guide_axis(angle = 45)) +
+  theme_classic()
+
+
+```
+**Comments:** 
+ . Data is skewed to the left. 
+ . Few outliers were found.
+ . The majority of orders were delivered.
+
+
+
+#### 2.3.2.2. fct_orders_item
+```{r}
+# convert POSIXct to Date
+fct_orders_item$shipping_limit_date <- as.Date(fct_orders_item$shipping_limit_date)
+
+ggplot(data=fct_orders_item, aes(x=shipping_limit_date)) +
+ geom_histogram(fill="steelblue", color="black", bin=40) +
+ ggtitle("Histogram of shipping_limit_date")
+
+ggplot(data=fct_orders_item, aes(x=price)) +
+ geom_histogram(fill="steelblue", color="black", bin=40) +
+ ggtitle("Histogram of price")
+
+ggplot(data=fct_orders_item, aes(x=freight_value)) +
+ geom_histogram(fill="steelblue", color="black", bin=40) +
+ ggtitle("Histogram of freight_value")
+
+
+# Boxplots --------------------------------------------------------------
+
+boxplot(fct_orders_item$shipping_limit_date,
+  ylab = "shipping_limit_date")
+
+boxplot(fct_orders_item$price,
+  ylab = "price")
+
+boxplot(fct_orders_item$freight_value,
+  ylab = "freight_value")
+
+# Frequency --------------------------------------------------------------
+# Compute the frequency
+seller_id <- fct_orders_item %>%
+        group_by(seller_id) %>%
+        dplyr::summarise(counts = n()) %>% 
+        arrange(desc(counts))
+
+# Top 10
+top_10_seller_id <- seller_id[c(1:10),]
+
+
+# Create the bar plot
+ggplot(top_10_seller_id, aes(x =fct_reorder(seller_id, -counts, max), y = counts)) +
+  geom_bar(fill = "#0073C2FF", stat = "identity") +
+  geom_text(aes(label = counts), vjust = -0.3) + 
+  scale_x_discrete(guide = guide_axis(angle = 45)) +
+  theme_classic()
+
+
+```
+**Comments:** 
+ . Some of the data is skewed to the right and other to the left. 
+ . An high number of outliers were found (price and freight_values).
+ . There is not a clear prevalence of orders by one seller (or group of sellers).
+
+
+
+
+#### 2.3.2.3. dim_customer
+```{r}
+# Frequency --------------------------------------------------------------
+# Compute the frequency
+customer_zip_code_prefix <- dim_customer %>%
+        group_by(customer_zip_code_prefix) %>%
+        dplyr::summarise(counts = n()) %>% 
+        arrange(desc(counts))
+
+customer_city <- dim_customer %>%
+        group_by(customer_city) %>%
+        dplyr::summarise(counts = n()) %>% 
+        arrange(desc(counts))
+
+customer_state <- dim_customer %>%
+        group_by(customer_state) %>%
+        dplyr::summarise(counts = n()) %>% 
+        arrange(desc(counts))
+
+# Top 10
+top_10_customer_zip_code_prefix <- customer_zip_code_prefix[c(1:10),]
+top_10_customer_zip_code_prefix$customer_zip_code_prefix <- as.factor(top_10_customer_zip_code_prefix$customer_zip_code_prefix )
+
+top_10_customer_city <- customer_city[c(1:10),]
+
+top_10_customer_state <- customer_state[c(1:10),]
+
+
+# Create the bar plot
+ggplot(top_10_customer_zip_code_prefix, aes(fct_reorder(customer_zip_code_prefix, -counts, max), y = counts)) +
+  geom_bar(fill = "#0073C2FF", stat = "identity") +
+  geom_text(aes(label = counts), vjust = -0.3) + 
+  scale_x_discrete(guide = guide_axis(angle = 45)) +
+  theme_classic()
+
+ggplot(top_10_customer_city, aes(fct_reorder(customer_city, -counts, max), y = counts)) +
+  geom_bar(fill = "#0073C2FF", stat = "identity") +
+  geom_text(aes(label = counts), vjust = -0.3) + 
+  scale_x_discrete(guide = guide_axis(angle = 45)) +
+  theme_classic()
+
+ggplot(top_10_customer_state, aes(fct_reorder(customer_state, -counts, max), y = counts)) +
+  geom_bar(fill = "#0073C2FF", stat = "identity") +
+  geom_text(aes(label = counts), vjust = -0.3) + 
+  scale_x_discrete(guide = guide_axis(angle = 45)) +
+  theme_classic()
+
+```
+**Comments:** 
+ . Most of the orders were made by customers from são paulo, rio de janeiro, belo horizonte, and brasília. 
+ . Most of the orders were made by customers from SP, RJ, and MG.
+ 
+ 
+ 
+#### 2.3.2.3. dim_payments
+```{r}
+# Histogram --------------------------------------------------------------
+ggplot(data=dim_payments, aes(x=payment_value)) +
+ geom_histogram(fill="steelblue", color="black", bin=40) +
+ ggtitle("Histogram of Payment Value")
+
+
+# Boxplots --------------------------------------------------------------
+boxplot(dim_payments$payment_value,
+  ylab = "Payment Value"
+)
+
+
+# Frequency --------------------------------------------------------------
+# Compute the frequency
+payment_sequential <- dim_payments %>%
+        group_by(payment_sequential) %>%
+        dplyr::summarise(counts = n()) %>% 
+        arrange(desc(counts))
+
+payment_type <- dim_payments %>%
+        group_by(payment_type) %>%
+        dplyr::summarise(counts = n()) %>% 
+        arrange(desc(counts))
+
+payment_installments <- dim_payments %>%
+        group_by(payment_installments) %>%
+        dplyr::summarise(counts = n()) %>% 
+        arrange(desc(counts))
+
+# Top 10
+top_10_payment_sequential<- payment_sequential[c(1:10),]
+top_10_payment_sequential$payment_sequential <- as.factor(top_10_payment_sequential$payment_sequential)
+
+top_10_payment_installments<- payment_installments[c(1:10),]
+top_10_payment_installments$payment_installments <- as.factor(top_10_payment_installments$payment_installments)
+
+
+# Create the bar plot
+ggplot(top_10_payment_sequential, aes(x = fct_reorder(payment_sequential, -counts, max), y = counts))+
+  geom_bar(fill = "#0073C2FF", stat = "identity") +
+  geom_text(aes(label = counts), vjust = -0.3) + 
+  scale_x_discrete(guide = guide_axis(angle = 45)) +
+  theme_classic()
+
+ggplot(payment_type , aes(x = fct_reorder(payment_type, -counts, max), y = counts)) +
+  geom_bar(fill = "#0073C2FF", stat = "identity") +
+  geom_text(aes(label = counts), vjust = -0.3) + 
+  scale_x_discrete(guide = guide_axis(angle = 45)) +
+  theme_classic()
+
+ggplot(top_10_payment_installments, aes(x = fct_reorder(payment_installments, -counts, max), y = counts)) +
+  geom_bar(fill = "#0073C2FF", stat = "identity") +
+  geom_text(aes(label = counts), vjust = -0.3) + 
+  scale_x_discrete(guide = guide_axis(angle = 45)) +
+  theme_classic()
+
+```
+**Comments:** 
+ . An high number of outliers were found (payment_value).
+ . Most of the orders were made in 1 payment sequential.
+ . Most of the orders were made using credit card, followed by boleto, voucher, and debit card. 
+ 
+
+
+#### 2.3.2.3. dim_products
+```{r}
+# Histogram --------------------------------------------------------------
+ggplot(data=dim_products, aes(x=product_photos_qty)) +
+ geom_histogram(fill="steelblue", color="black", binwidth = 1) +
+ ggtitle("Histogram of product_photos_qty")
+
+ggplot(data=dim_products, aes(x=product_weight_g)) +
+ geom_histogram(fill="steelblue", color="black", binwidth = 1000) +
+ ggtitle("Histogram of product_weight_g")
+
+ggplot(data=dim_products, aes(x=product_length_cm)) +
+ geom_histogram(fill="steelblue", color="black", binwidth = 10) +
+ ggtitle("Histogram of product_length_cm")
+
+ggplot(data=dim_products, aes(x=product_height_cm)) +
+ geom_histogram(fill="steelblue", color="black", binwidth = 10) +
+ ggtitle("Histogram of product_height_cm")
+
+ggplot(data=dim_products, aes(x=product_width_cm)) +
+ geom_histogram(fill="steelblue", color="black", binwidth = 10) +
+ ggtitle("Histogram of product_width_cm")
+
+# Boxplots --------------------------------------------------------------
+boxplot(dim_products$product_photos_qty,
+  ylab = "product_photos_qty")
+
+boxplot(dim_products$product_weight_g,
+  ylab = "product_weight_g")
+
+boxplot(dim_products$product_length_cm,
+  ylab = "product_length_cm")
+
+boxplot(dim_products$product_height_cm,
+  ylab = "product_height_cm")
+
+boxplot(dim_products$product_width_cm,
+  ylab = "product_width_cm")
+
+
+# Frequency --------------------------------------------------------------
+# Compute the frequency
+product_category_name <- dim_products %>%
+        group_by(product_category_name) %>%
+        dplyr::summarise(counts = n()) %>% 
+        arrange(desc(counts))
+
+# Top 10
+top_10_product_category_name<- product_category_name[c(1:10),]
+
+
+# Create the bar plot
+ggplot(top_10_product_category_name, aes(x =fct_reorder(product_category_name, -counts, max), y = counts)) +
+  geom_bar(fill = "#0073C2FF", stat = "identity") +
+  geom_text(aes(label = counts), vjust = -0.3) + 
+  scale_x_discrete(guide = guide_axis(angle = 45)) +
+  theme_classic()
+
+
+```
+
+**Comments:** 
+ . Data is skewed to the right.
+ . An high number of outliers were found.
+ . Most of the orders were made in 1 payment sequential.
+ . Most of the orders were made for products from casa_mesa_banho, esporte_lazer, moveis_decoracao, beleza_saude, and utilidasdes_domesticas.
+
+
+### 2.3.3. Correlations
+#### 2.3.3.1. fct_orders
+```{r}
+# convert POSIXct to Date
+fct_orders$order_approved_at<- as.Date(fct_orders$order_approved_at, format = "%Y-%m-%d")
+fct_orders$order_delivered_carrier_date <- as.Date(fct_orders$order_delivered_carrier_date, format = "%Y-%m-%d")
+fct_orders$order_delivered_customer_date <- as.Date(fct_orders$order_delivered_customer_date, format = "%Y-%m-%d")
+fct_orders$order_estimated_delivery_date <- as.Date(fct_orders$order_estimated_delivery_date, format = "%Y-%m-%d")
+fct_orders$order_purchase_timestamp <- as.Date(fct_orders$order_purchase_timestamp, format = "%Y-%m-%d")
+
+# # Compute a correlation matrix
+# corr_fct_orders <- round(cor(fct_orders[,-c(1:3)]), 1)
+# 
+# # Visualize the correlation matrix
+# ggcorrplot(corr_fct_orders, hc.order = TRUE, type = "lower",
+#    lab = TRUE)
+
+
+```
+**Comments:** 
+ . None of the variables is numeric, therefore is not possible to perform correlation analysis.
+
+#### 2.3.3.2. fct_orders_item
+```{r}
+# convert POSIXct to Date
+fct_orders_item$shipping_limit_date <- as.Date(fct_orders_item$shipping_limit_date)
+
+# Compute a correlation matrix
+corr_fct_orders_item <- round(cor(fct_orders_item[,c(2,6:7)]), 1)
+
+# Visualize the correlation matrix
+ggcorrplot(corr_fct_orders_item, hc.order = TRUE, type = "lower",
+   lab = TRUE)
+
+
+cormat_fct_orders_item <- round(cor(fct_orders_item[,c(2,6:7)]),2)
+
+
+# # Get upper triangle of the correlation matrix
+# get_upper_tri_fct_orders_item  <- function(cormat_fct_orders_item ){
+#     cormat[lower.tri(cormat_fct_orders_item )]<- NA
+#     return(cormat_fct_orders_item )
+#   }
+#   
+# upper_tri_fct_orders_item  <- get_upper_tri(cormat_fct_orders_item )
+# upper_tri_fct_orders_item
+# 
+# # Melt the correlation matrix
+# melted_cormat_fct_orders_item <- melt(upper_tri_fct_orders_item, na.rm = TRUE)
+# 
+# # Heatmap
+# ggplot(data = melted_cormat_fct_orders_item, aes(Var2, Var1, fill = value))+
+#  geom_tile(color = "white")+
+#  scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+#    midpoint = 0, limit = c(-1,1), space = "Lab", 
+#    name="Pearson\nCorrelation") +
+#   theme_minimal()+ 
+#  theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+#     size = 12, hjust = 1))+
+#  coord_fixed()+
+#   geom_text(aes(label = ifelse(!is.na(value), sprintf("%.2f", value), "")), 
+#             color = "black", size = 3)
+
+```
+**Comments:** 
+ . No correlations were found amoung numeric variables. 
+ 
+ 
+#### 2.3.3.3. dim_customer
+```{r}
+
+
+```
+**Comments:** 
+ . None of the variables is numeric, therefore is not possible to perform correlation analysis.
+
+#### 2.3.3.3. dim_payments
+```{r}
+# Compute a correlation matrix
+corr_dim_payments <- round(cor(dim_payments[,-c(1,3)]), 1)
+
+# Visualize the correlation matrix
+ggcorrplot(corr_dim_payments, hc.order = TRUE, type = "lower",
+   lab = TRUE)
+
+```
+**Comments:** 
+ . No correlations were found amoung numeric variables. 
+
+#### 2.3.3.3. dim_products
+```{r}
+# # Compute a correlation matrix
+# corr_dim_products <- round(cor(dim_products[,c(6:9)]), 1)
+# corr_dim_products <- na.omit(corr_dim_products)
+# 
+# 
+# # Visualize the correlation matrix
+# ggcorrplot(corr_dim_products, hc.order = TRUE, type = "lower",
+#    lab = TRUE)
+
+```
+
+**Comments:** 
+ . None of the variables is numeric, therefore is not possible to perform correlation analysis.
+
+

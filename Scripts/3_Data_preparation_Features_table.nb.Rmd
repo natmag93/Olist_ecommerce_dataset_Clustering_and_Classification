@@ -1,0 +1,364 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Libraries
+```{r}
+rm(list = ls())
+graphics.off()
+
+library(tidyverse)
+library(caret)
+library(classInt)
+```
+
+# Import csv
+```{r}
+
+dim_customers <- read.csv(file.path("tables_raw_data", "dim_customers.csv"))
+head(dim_customers)
+str(dim_customers)
+n_distinct((dim_customers$customer_unique_id))
+dim_payments <- read.csv(file.path("tables_raw_data", "dim_payments.csv"))
+head(dim_payments)
+str(dim_payments)
+dim_products <- read.csv(file.path("tables_raw_data", "Dim_products.csv"))
+head(dim_products)
+str(dim_products)
+fct_orders <- read.csv(file.path("tables_raw_data", "fct_orders.csv"))
+fct_orders$order_purchase_timestamp <- as.Date(fct_orders$order_purchase_timestamp)
+head(fct_orders)
+str(fct_orders)
+fct_orders_item <- read.csv(file.path("tables_raw_data", "fct_order_items.csv"))
+head(fct_orders_item)
+str(fct_orders_item)
+```
+# Create target table for customers who returned in 2018
+```{r}
+# see fct_orders table
+head(fct_orders)
+str(fct_orders)
+
+# count total orders (99441)
+n_distinct(fct_orders$order_id)
+
+# count total 99441 customer_id in fct_orders (99441)
+n_distinct(fct_orders$customer_id)
+
+# count total customer_unique_id in dim_customers (96096)
+n_distinct(dim_customers$customer_unique_id)
+head(dim_customers)
+str(dim_customers)
+
+
+# join fct_orders and dim_customers
+p_table <- fct_orders %>% left_join(dim_customers, by = "customer_id") %>% arrange(.$order_purchase_timestamp) 
+p_table
+
+# split in before and after 2018-01-01
+orders_bf_2018 <- p_table %>% filter(as.Date(order_purchase_timestamp) < as.Date("2018-01-01"))
+orders_af_2018 <- p_table %>% filter(as.Date(order_purchase_timestamp) >= as.Date("2018-01-01"))
+
+
+# return customers who match 2 tables af_2018 & bf_2018
+# 687 costumers returned
+ret_customers <- intersect(orders_af_2018$customer_unique_id, orders_bf_2018$customer_unique_id)
+str(ret_customers)
+head(ret_customers)
+
+
+# add "target" variable to match customers who returned in 2018 in p_table
+target_table <- orders_bf_2018  %>% distinct(customer_unique_id) %>%  mutate(target = ifelse(customer_unique_id %in% orders_af_2018$customer_unique_id, 1, 0))
+
+# confirm mutate (same value as intersect)
+value <- target_table %>% filter(target == 1)
+
+# save target table
+# write.csv(target_table, "target.csv", row.names = FALSE)
+
+```
+# RFM analysis
+```{r}
+
+# Recency: How recently a customer made a purchase
+# Frequency: How often a customer makes a purchase
+# Monetary Value: How much money a customer has spent on purchases
+
+
+# add dim_payments and fct_orders_item to orders_bf_2018 table
+orders_bf_2018 <- orders_bf_2018 %>% left_join(dim_payments, by = "order_id") %>% left_join(fct_orders_item, by = "order_id") %>% arrange(.$order_id)
+
+# write.csv(orders_bf_2018, "tables_features/orders_bf_2018.csv", row.names = FALSE)
+
+# Create rfm table with necessary columns
+rfm_table <- orders_bf_2018 %>% select(customer_id, customer_unique_id, order_id, order_purchase_timestamp, price)
+head(rfm_table)
+
+#see distinct customers
+n_distinct(rfm_table$customer_unique_id)
+
+rfm_analysis <- rfm_table %>%
+  mutate(recency = as.Date("2017-12-31") - as.Date(order_purchase_timestamp)) %>%
+  group_by(customer_unique_id) %>% 
+  dplyr::summarize(
+    recency = min(recency),
+    frequency = n_distinct(order_id),
+    monetary = sum(price)
+  )
+
+#convert recency to numeric value
+rfm_analysis$recency <- as.numeric(rfm_analysis$recency)
+rfm_analysis
+
+#see diferences in customer_unique_id for created tables
+n_distinct(rfm_analysis$customer_unique_id)
+
+n_distinct(target_table$customer_unique_id)
+
+n_distinct(orders_bf_2018$customer_unique_id)
+
+n_distinct(rfm_table$customer_unique_id)
+
+#save rfm_analysis table
+#write.csv(rfm_analysis, "rfm_analysis.csv", row.names = FALSE)
+
+
+```
+
+# Create fct_features table with RFM as features
+```{r}
+
+rfm_analysis <- read.csv(file.path("tables_features", "rfm_analysis.csv"))
+target_table <- read.csv(file.path("tables_features", "target.csv"))
+
+# Discretize RFM table
+# Create quantiles
+quantis_recency <- quantile(rfm_analysis$recency, c(0, 0.25, 0.5, 0.75, 1), na.rm = TRUE)
+quantis_monetary <- quantile(rfm_analysis$monetary, c(0, 0.25, 0.5, 0.75, 1), na.rm = TRUE)
+# quantis_frequency <- quantile(rfm_analysis$frequency, c(0, 0.25, 0.5, 0.75, 1), na.rm = TRUE)
+frequency_breaks <- classIntervals(rfm_analysis$frequency,n = 4)$brks
+
+# Discretize recency variable
+recency_trans<-
+  cut(rfm_analysis$recency, breaks = quantis_recency,
+      labels = c("1", "2", "3", "4"), include.lowest = TRUE) %>% as.integer()
+
+# Discretize frequency variable
+frequency_trans <- findInterval(rfm_analysis$frequency, as.character(1:4))
+# frequency_trans<-
+#   cut(rfm_analysis$frequency, breaks = quantis_frequency,
+#       labels = c("1", "2", "3", "4"), include.lowest = TRUE) %>% as.integer()
+
+# Discretize monetary variable
+monetary_trans<-
+  cut(rfm_analysis$monetary, breaks = quantis_monetary,
+      labels = c("1", "2", "3", "4"), include.lowest = TRUE) %>% as.integer()
+
+# Creating new features
+rfm_analysis <- rfm_analysis %>% mutate(
+  recency_disc=recency_trans,
+  frequency_disc=frequency_trans,
+  monetary_disc=monetary_trans)
+ 
+# Selecting features
+rfm_analysis_disc <- rfm_analysis %>% select('customer_unique_id','recency_disc', 'frequency_disc', 'monetary_disc')
+# Rename columns
+rfm_analysis_disc <- rfm_analysis_disc %>% dplyr::rename('R' = 'recency_disc', 'F' = 'frequency_disc', 'M' = 'monetary_disc')
+
+# Create RFM score, keeping NA values
+rfm_analysis_disc <- rfm_analysis_disc %>%
+  mutate(RFM_Score = rowSums(.[c("R", "F", "M")], na.rm = FALSE))
+
+#save rfm_analysis_disc table
+# write.csv(rfm_analysis_disc, "rfm_analysis_disc.csv", row.names = FALSE)
+
+# merge rfm_analysis and target_table
+fct_features <- merge(x = target_table[,  c("customer_unique_id", "target")], y = rfm_analysis_disc, by = "customer_unique_id", all.x=TRUE)
+
+# view NA for fct_features by monetary-based columns
+sum(is.na(fct_features$M))
+sum(is.na(fct_features$RFM_Score))
+# monetary has NA values
+sum(is.na(fct_features))
+
+# drop missing values (1068 values,534 rows, ~1,3% data)
+fct_features <- drop_na(fct_features)
+
+#confirm drop
+sum(is.na(fct_features))
+
+# save fct_features_table
+# write.csv(fct_features, "tables_features/fct_features_disc.csv", row.names = FALSE)
+
+
+
+```
+
+# x iteration
+# Features based on orders_date; customer state ; most freq product; payment type
+```{r}
+# import target_table
+# target_table <- read.csv(file.path("tables_features", "fct_features.csv"))
+orders_bf_2018 <- read.csv(file.path("tables_features", "orders_bf_2018.csv"))
+fct_features <- read.csv(file.path("tables_features", "fct_features_disc.csv"))
+
+# add dim_products to orders_bf_2018 table
+orders_bf_2018 <- orders_bf_2018 %>% left_join(dim_products, by = "product_id")
+
+# add fct_features to orders_bf_2018 table
+fct_features <- fct_features %>% right_join(orders_bf_2018, by = "customer_unique_id")
+
+# confirm distinct_customer_unique_id from target table (44034)
+n_distinct(fct_features$customer_unique_id)
+
+
+# convert to dates 
+{fct_features$order_purchase_timestamp <- as.Date(fct_features$order_purchase_timestamp)
+  fct_features$order_approved_at <- as.Date(fct_features$order_approved_at)
+fct_features$order_delivered_carrier_date <- as.Date(fct_features$order_delivered_carrier_date)
+fct_features$order_delivered_customer_date <- as.Date(fct_features$order_delivered_customer_date)
+fct_features$order_estimated_delivery_date <- as.Date(fct_features$order_estimated_delivery_date)}
+
+```
+
+# Create new features baded on order delivery
+```{r}
+# check order_status
+unique(fct_features$order_status)
+
+# create features based on orders "delivered" or not
+fct_features <- fct_features %>%  mutate(order_delivered = ifelse(order_status == "delivered", 1, 0))
+
+```
+
+# Create feature for delivery days
+```{r}
+
+fct_features <- fct_features %>%
+  mutate(delivery_days = as.numeric(as.Date(order_delivered_customer_date) - as.Date(order_purchase_timestamp)))
+
+```
+
+# Create new features based predicted arrival vs actual arrival
+```{r}
+
+# Get difference on days
+fct_features <- fct_features %>%
+  mutate(dif_est_arrival = as.numeric(as.Date(order_estimated_delivery_date) - as.Date(order_delivered_customer_date)))
+
+# We see that we have some negative values, meaning that the order arrived latter 
+# than estimated, so we can see that some orders were "late" and others "on time"
+# create new feature "late = 1 " "on time = 0"
+fct_features <- fct_features %>% mutate(order_late_arrival = ifelse(dif_est_arrival < 0, 1, 0))
+
+
+```
+
+# One hot encoding on payment_type
+```{r}
+# Create one hot encoding to columns with different types of variables
+payment_type <- fct_features$payment_type
+# Perform one-hot encoding
+encoded_data <- predict(dummyVars(~ payment_type, data = fct_features), newdata = fct_features)
+# Join the encoded columns to the original dataset
+fct_features <- cbind(fct_features, encoded_data)
+
+
+```
+
+# One hot encoding for customer state
+```{r}
+
+# Create one hot encoding to columns with different types of variables
+customer_state <- fct_features$customer_state
+# Perform one-hot encoding
+encoded_data <- predict(dummyVars(~ customer_state, data = fct_features), newdata = fct_features)
+
+# Specify the names of the columns you want to select based on 
+# most frequent state
+selected_columns <- c("customer_stateSP", "customer_stateRJ", "customer_stateMG")
+
+# Join the encoded columns to the original dataset
+fct_features <- cbind(fct_features, encoded_data[, selected_columns])
+
+
+
+```
+
+# One hot encoding for most frequent product_type
+```{r}
+
+# Create one hot encoding to columns with different types of variables
+customer_state <- fct_features$product_category_name
+# Perform one-hot encoding
+encoded_data <- predict(dummyVars(~ product_category_name, data = fct_features), newdata = fct_features)
+
+# Specify the names of the columns you want to select based on the 5
+# most frequent product category names
+selected_columns <- c("product_category_namecama_mesa_banho", "product_category_nameesporte_lazer", "product_category_namemoveis_decoracao", "product_category_namebeleza_saude", "product_category_nameutilidades_domesticas")
+
+# Join the encoded columns to the original dataset
+fct_features <- cbind(fct_features, encoded_data[, selected_columns])
+
+
+```
+
+```{r}
+
+# confirm absence of duplicated rows
+sum(duplicated(fct_features))
+
+```
+
+
+# select only desired variables
+```{r}
+
+# Specify the indices of the columns you want to exclude
+columns_to_exclude <- c(7,8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 19, 23, 24, 25, 28)
+
+# Select all columns from the original dataset except for the specified columns
+selected_data <- fct_features[, -columns_to_exclude]
+
+selected_data1 <- selected_data %>% 
+  group_by(customer_unique_id) %>% 
+  dplyr::summarize(
+    target,
+    R,
+    F,
+    M,
+    RFM_Score,
+    payment_value = sum(payment_value),
+    product_weight_g = mean(product_weight_g),
+    order_delivered = sum(order_delivered),
+    max_delivery_days = max(delivery_days),
+    min_delivery_days = min(delivery_days),
+    dif_est_arrival = mean(dif_est_arrival),
+    order_late_arrival = sum(order_late_arrival),
+    payment_typeboleto = sum(payment_typeboleto),
+    payment_typecredit_card = sum(payment_typecredit_card),
+    payment_typedebit_card = sum(payment_typedebit_card),
+    payment_typevoucher = sum(payment_typevoucher),
+    customer_stateSP,
+    customer_stateRJ,
+    customer_stateMG,
+    product_category_namecama_mesa_banho = sum(product_category_namecama_mesa_banho),
+    product_category_nameesporte_lazer = sum(product_category_nameesporte_lazer),
+    product_category_namemoveis_decoracao = sum(product_category_namemoveis_decoracao),
+    product_category_namebeleza_saude = sum(product_category_namebeleza_saude),
+    product_category_nameutilidades_domesticas = sum(product_category_nameutilidades_domesticas)
+    ) %>% distinct(customer_unique_id, .keep_all=TRUE)
+
+
+
+# save table
+ write.csv(selected_data1, "tables_features/fct_features_pred_morefeatures.csv", row.names = FALSE)
+```
+

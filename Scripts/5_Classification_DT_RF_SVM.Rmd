@@ -1,0 +1,1003 @@
+---
+title: "Prediction Models - Iteration 3"
+output:
+  html_document: 
+    toc: true
+    fig_width: 13
+    fig_height: 9
+  html_notebook:
+    toc: true
+fig_caption: true
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+# 1. Load Libraries
+
+```{r}
+rm(list = ls())
+graphics.off()
+
+# load libraries
+library(tidyr)
+library(tidyverse)
+library(readxl)
+library(plyr)
+library(readr)
+library(reshape2)
+library(caret)
+library(rpart)     
+library(rpart.plot) 
+library(smotefamily)
+library(ggcorrplot)
+library(e1071)
+library(ggplot2)
+```
+
+# 2. Import necessary tables
+
+```{r}
+# import iteration file
+fct_features <- read.csv(file.path("tables_features", "fct_features_pred_morefeatures.csv"))
+head(fct_features)
+str(fct_features)
+```
+
+## 3. EDA
+
+### 3.1. Check dataframe
+
+```{r}
+str(fct_features)
+
+```
+
+### 3.2. Missing values
+
+```{r}
+# fct_orders
+colSums(is.na(fct_features)) %>% as.data.frame
+sum(is.na(fct_features))
+
+fct_features <- drop_na(fct_features)
+
+```
+
+**Comments:** Missing values were found for almost every feature.
+Since the value is still relatively low (maximum of 4% of total observations), missing values will be dropped.
+
+### 3.3. Distribution of variables' values (Histogram)
+
+#### 3.3.1. fct_features
+
+```{r}
+ggplot(data=fct_features, aes(x=target)) +
+ geom_histogram(fill="steelblue", color="black", binwidth = 0.5) +
+ stat_bin(binwidth=1, geom="text", aes(label=..count..), vjust=-0.55) +
+ ggtitle("Histogram of Target")
+
+ggplot(data=fct_features, aes(x=R)) +
+ geom_histogram(fill="steelblue", color="black", binwidth = 0.5) +
+ stat_bin(binwidth=1, geom="text", aes(label=..count..), vjust=-0.55) +
+ ggtitle("Histogram of Recency")
+
+ggplot(data=fct_features, aes(x=F)) +
+ geom_histogram(fill="steelblue", color="black", binwidth = 0.5) +
+ stat_bin(binwidth=1, geom="text", aes(label=..count..), vjust=-0.55) +
+ ggtitle("Histogram of Frequency")
+
+ggplot(data=fct_features, aes(x=M)) +
+ geom_histogram(fill="steelblue", color="black", binwidth = 0.5) +
+ stat_bin(binwidth=1, geom="text", aes(label=..count..), vjust=-0.55) +
+ ggtitle("Histogram of Monetary")
+
+ggplot(data=fct_features, aes(x=RFM_Score)) +
+ geom_histogram(fill="steelblue", color="black", binwidth = 0.5) +
+ stat_bin(binwidth=1, geom="text", aes(label=..count..), vjust=-0.55) +
+ ggtitle("Histogram of RFM Score")
+
+ggplot(data=fct_features, aes(x=payment_value)) +
+ geom_histogram(fill="steelblue", color="black", binwidth = 1000) +
+ ggtitle("Histogram of Payment Value")
+
+ggplot(data=fct_features, aes(x=product_weight_g)) +
+ geom_histogram(fill="steelblue", color="black", binwidth = 1000) +
+ ggtitle("Histogram of Product weight (g)")
+
+ggplot(data=fct_features, aes(x=order_delivered)) +
+ geom_histogram(fill="steelblue", color="black", binwidth = 0.5) +
+ ggtitle("Histogram of Orders Delivered")
+
+ggplot(data=fct_features, aes(x=max_delivery_days)) +
+ geom_histogram(fill="steelblue", color="black", binwidth = 10) +
+ ggtitle("Histogram of Maximum Delivery Days")
+
+ggplot(data=fct_features, aes(x=min_delivery_days)) +
+ geom_histogram(fill="steelblue", color="black", binwidth = 10) +
+ ggtitle("Histogram of Minimum Delivery Days")
+
+ggplot(data=fct_features, aes(x=dif_est_arrival)) +
+ geom_histogram(fill="steelblue", color="black", binwidth = 10) +
+ ggtitle("Histogram of Difference Between Estimated and Arrival Days")
+
+ggplot(data=fct_features, aes(x=order_late_arrival)) +
+ geom_histogram(fill="steelblue", color="black", binwidth = 1) +
+ ggtitle("Histogram of Orders with Late Arrival")
+
+ggplot(data=fct_features, aes(x=payment_typeboleto)) +
+ geom_histogram(fill="steelblue", color="black", binwidth = 1) +
+ stat_bin(binwidth=1, geom="text", aes(label=..count..), vjust=-0.55) +
+ ggtitle("Histogram of Orders with Payment Type Boleto")
+
+ggplot(data=fct_features, aes(x=payment_typecredit_card)) +
+ geom_histogram(fill="steelblue", color="black", binwidth = 1) +
+ stat_bin(binwidth=1, geom="text", aes(label=..count..), vjust=-0.55) +
+ ggtitle("Histogram of Orders with Payment Type Credit Card")
+
+ggplot(data=fct_features, aes(x=payment_typedebit_card)) +
+ geom_histogram(fill="steelblue", color="black", binwidth = 0.5) +
+ stat_bin(binwidth=1, geom="text", aes(label=..count..), vjust=-0.55) +
+ ggtitle("Histogram of Orders with Payment Type Debit Card")
+
+ggplot(data=fct_features, aes(x=payment_typevoucher)) +
+ geom_histogram(fill="steelblue", color="black", binwidth = 1) +
+ ggtitle("Histogram of Orders with Payment Type Voucher")
+
+ggplot(data=fct_features, aes(x=customer_stateSP)) +
+ geom_histogram(fill="steelblue", color="black", binwidth = 0.5) +
+ stat_bin(binwidth=1, geom="text", aes(label=..count..), vjust=-0.55) +
+ ggtitle("Histogram of Customer State SP")
+
+ggplot(data=fct_features, aes(x=customer_stateRJ)) +
+ geom_histogram(fill="steelblue", color="black", binwidth = 0.5) +
+ stat_bin(binwidth=1, geom="text", aes(label=..count..), vjust=-0.55) +
+ ggtitle("Histogram of Customer State RJ")
+
+ggplot(data=fct_features, aes(x=customer_stateMG)) +
+ geom_histogram(fill="steelblue", color="black", binwidth = 0.5) +
+ stat_bin(binwidth=1, geom="text", aes(label=..count..), vjust=-0.55) +
+ ggtitle("Histogram of Customer State MG")
+
+ggplot(data=fct_features, aes(x=product_category_namecama_mesa_banho)) +
+ geom_histogram(fill="steelblue", color="black", binwidth = 1) +
+ ggtitle("Histogram of Product Category Name Cama Mesa Banho")
+
+ggplot(data=fct_features, aes(x=product_category_nameesporte_lazer)) +
+ geom_histogram(fill="steelblue", color="black", binwidth = 1) +
+ stat_bin(binwidth=1, geom="text", aes(label=..count..), vjust=-0.55) +
+ ggtitle("Histogram of Product Category Name Esporte Lazer")
+
+ggplot(data=fct_features, aes(x=product_category_namemoveis_decoracao)) +
+ geom_histogram(fill="steelblue", color="black", binwidth = 1) +
+ stat_bin(binwidth=1, geom="text", aes(label=..count..), vjust=-0.55) +
+ ggtitle("Histogram of Product Category Name Moveis Decoracao")
+
+ggplot(data=fct_features, aes(x=product_category_namebeleza_saude)) +
+ geom_histogram(fill="steelblue", color="black", binwidth = 1) +
+ stat_bin(binwidth=1, geom="text", aes(label=..count..), vjust=-0.55) +
+ ggtitle("Histogram of Product Category Name Beleza Saude")
+
+ggplot(data=fct_features, aes(x=product_category_nameutilidades_domesticas)) +
+ geom_histogram(fill="steelblue", color="black", binwidth = 1) +
+ stat_bin(binwidth=1, geom="text", aes(label=..count..), vjust=-0.55) +
+ ggtitle("Histogram of Product Category Name Utilidades Domesticas")
+
+
+
+```
+
+**Comments:** .
+*Target* - Equal to iteration 1.
+. *Recency* - Equal to iteration 2.
+. *Frequency* - Equal to iteration 2.
+. *Monetary* - Equal to iteration 2.
+. *RFM_Score* - Equal to iteration 2.
+. *payment_value* - Data is skewed to the right, with the majority having low values.
+. *product_weight* - Data is skewed to the right, with the majority having low values.
+. *order_delivered* - Data is skewed to the right, with the majority having at least one delivered order.
+. *max_delivery_days* - Data is skewed to the right, with the majority having low values.
+. *min_delivery_days* - Data is skewed to the right, with the majority having low values.
+. *dif_est_arrival* - Data is slightly skewed to the left.
+. *order_late_arrival* - Data is skewed to the right, with the majority having no orders with late arrival.
+. *payment_typeboleto* - Data is skewed to the right, with the majority having no orders payed with boleto.
+. *payment_typecredit_card* - Data is skewed to the right, with the majority having at least one order payed with credit card.
+. *payment_typedebit_card* - Data is skewed to the right, with the majority having no orders payed with debit card.
+. *payment_typevoucher* - Data is skewed to the right, with the majority having no orders payed with voucher.
+. *customer_stateSP* - The majority of costumers were not from SP.
+. *customer_stateRJ* - The majority of costumers were not from RJ.
+. *customer_stateMG* - The majority of costumers were not from MG.
+. *product_category_namecama_mesa_banho* - Data is skewed to the right, with the majority having no orders from cama mesa banho.
+. *product_category_nameesporte_lazer* - Data is skewed to the right, with the majority having no orders from cama mesa banho.
+. *product_category_namemoveis_decoracao* - Data is skewed to the right, with the majority having no orders from moveis decoracao.
+. *product_category_namebeleza_saude* - Data is skewed to the right, with the majority having no orders from beleza saude.
+. *product_category_nameutilidades_domesticas* - Data is skewed to the right, with the majority having no orders from utilidades domesticas.
+
+### 3.4 Distribution of variables' values (Boxplot)
+
+#### 3.4.1. fct_features
+
+```{r}
+
+boxplot(fct_features$target,
+  ylab = "Order Target")
+
+boxplot(fct_features$R,
+  ylab = "Order Recency")
+
+boxplot(fct_features$F,
+  ylab = "Order frequency")
+
+boxplot(fct_features$M,
+  ylab = "Order monetary")
+
+boxplot(fct_features$RFM_Score,
+  ylab = "Order RFM Score")
+
+boxplot(fct_features$payment_value,
+  ylab = "payment_value")
+
+boxplot(fct_features$product_weight_g,
+  ylab = "product_weight_g")
+
+boxplot(fct_features$order_delivered,
+  ylab = "order_delivered")
+
+boxplot(fct_features$max_delivery_days,
+  ylab = "max_delivery_days")
+
+boxplot(fct_features$min_delivery_days,
+  ylab = "min_delivery_days")
+
+boxplot(fct_features$dif_est_arrival,
+  ylab = "dif_est_arrival")
+
+boxplot(fct_features$order_late_arrival,
+  ylab = "order_late_arrival")
+
+boxplot(fct_features$payment_typeboleto,
+  ylab = "payment_typeboleto")
+
+boxplot(fct_features$payment_typecredit_card,
+  ylab = "payment_typecredit_card")
+
+boxplot(fct_features$payment_typevoucher,
+  ylab = "payment_typevoucher")
+
+boxplot(fct_features$customer_stateSP,
+  ylab = "customer_stateSP")
+
+boxplot(fct_features$customer_stateRJ,
+  ylab = "customer_stateRJ")
+
+boxplot(fct_features$customer_stateMG,
+  ylab = "customer_stateMG")
+
+boxplot(fct_features$product_category_namecama_mesa_banho,
+  ylab = "product_category_namecama_mesa_banho")
+
+boxplot(fct_features$product_category_nameesporte_lazer,
+  ylab = "product_category_nameesporte_lazer")
+
+boxplot(fct_features$product_category_namemoveis_decoracao,
+  ylab = "product_category_namemoveis_decoracao")
+
+boxplot(fct_features$product_category_namebeleza_saude,
+  ylab = "product_category_namebeleza_saude")
+
+boxplot(fct_features$product_category_nameutilidades_domesticas,
+  ylab = "product_category_nameutilidades_domesticas")
+
+```
+
+**Comments:** Few outliers were found for discretized features as well as features resulting from one hot encoding.
+The other features had an high number of outliers
+
+### 3.5. Correlations
+
+#### 3.5.1. fct_features
+
+```{r dev = "png"}
+# Rename features with long names
+fct_features <- fct_features %>% dplyr::rename(cat_ut_domesticas = product_category_nameutilidades_domesticas, cat_beleza_saude = product_category_namebeleza_saude, cat_moveis_decor = product_category_namemoveis_decoracao, cat_desporto_lazer = product_category_nameesporte_lazer, cat_cama_mesa_banho = product_category_namecama_mesa_banho)
+
+# Compute a correlation matrix
+corr <- round(cor(fct_features[,-1]),2)
+
+# Visualize the correlation matrix
+ggcorrplot(corr, hc.order = TRUE, type = "lower",
+   lab = TRUE,
+   lab_size = 2,
+   tl.cex = 8,
+   tl.srt = 90)
+
+```
+
+**Comments:** .
+Correlation was found between order_delivered and payment_typevoucher features.
+payment_typevoucher was therefore removed.
+. Correlation was found between dif_est_arrival and both max_delivery_days and min_delivery_days features.
+dif_est_arrival was therefore removed.
+. Correlation was found between max_delivery_days and min_delivery_days features.
+min_delivery_days removed.
+. Correlation was found between RFM_Score and both Recency and Monetary features.
+RFM_Score was therefore removed.
+. Remaining features can be used for ML.
+
+```{r, include=FALSE}
+# Create png file to save plot
+ppi <- 600
+png("correlations_ITmorefeatures.png", , width = 15*ppi, height = 10*ppi, res = ppi)
+ggcorrplot(corr, hc.order = TRUE, type = "lower",
+   lab = TRUE,
+   lab_size = 2,
+   tl.cex = 8,
+   tl.srt = 90)
+dev.off()
+```
+
+# 4. Define train and test sets for ML models
+
+### 4.1. Define levels for target
+
+```{r}
+# Define features to remove, including customer unique id
+columns_to_remove <- c(1, 6, 11, 12, 17)
+
+# Define custom levels and remove RFM_Score feature
+fct_features <- fct_features[,-columns_to_remove] %>% mutate(target = ifelse(target == "0", "not_returned", "returned"))
+
+# Convert integer column to factor
+fct_features$target <- factor(fct_features$target)
+
+
+```
+
+### 4.2. Define train and test sets ----------------------------------------------
+
+```{r}
+# Holdout a validation set, by defining the indices of the training set
+
+seed <- 12345
+
+set.seed(seed) 
+train_index <- createDataPartition(fct_features$target, p = 0.8, list = FALSE)
+
+train_set <- fct_features[train_index, ]
+test_set  <- fct_features[-train_index, ]
+
+# get a prob table between customers who returned vs not returned
+prop.table(table(train_set$target))
+
+```
+
+**Comments:** we see that only 1.6% of the customers returned (high imbalanced data)
+
+# 5. Create DT
+
+### 5.1. Fit Decision Tree model
+
+```{r}
+
+#' Model Decision Tree from Rpart (Recursive Partitioning and Regression Trees)
+model_tree <- rpart(target ~ ., data = train_set) 
+print(model_tree)
+
+#' View decision tree
+rpart.plot(model_tree,
+           main = "Decision Tree for target") 
+
+```
+
+**Comments:** .
+DT has only one node (root node), which predicts the outcome “not_returned” for all observations.
+. This is a result of the highly imbalanced data.
+
+```{r, include = FALSE}
+# Create png file to save plot
+ppi <- 600
+png("DT_Itmorefeatures.png", width = 4*ppi, height = 4*ppi, res = ppi)
+rpart.plot(model_tree, main = "Decision Tree for target")
+dev.off()
+
+```
+
+### 5.2. Validate results with a Confusion Matrix
+
+```{r}
+
+# Validate results with a Confusion Matrix --------------------------------
+
+#' Calculate model predictions on TEST set
+prediction.dt <- predict(model_tree,
+                         test_set,
+                         type = "class") 
+head(prediction.dt)
+
+test_set$prediction <- prediction.dt 
+
+head(prediction.dt)
+
+confusionMatrix(data = prediction.dt,
+                reference = test_set$target)
+
+# compara a reference com a data
+# sensibility: true positives
+# specificity : true negatives
+
+```
+
+**Comments:** .
+Confusion matrix - The model was able to predict correctly the costumers who did not buy again in 8327 out of 8327 total cases.
+. Despite being able to detect true positives (costumers who did not buy again), it fails to detect true negatives (costumers who bought again).
+. The model might be biased towards the majority class, resulting from class imbalance.
+
+### 5.3. Compare Gini Impurity vs Information Gain
+
+```{r}
+
+# Compare Gini Impurity vs Information Gain -------------------------------
+
+# Learn tree with Gini Impurity
+model_tree_gini <- rpart(target ~.,
+                         data = train_set,
+                         parms = list(split = "gini"))
+
+# Learn tree with Information Gain
+model_tree_info <- rpart(target ~.,
+                         data = train_set,
+                         parms = list(split = "information"))
+
+```
+
+### 5.4. Plot trees
+
+```{r}
+
+# Plot trees
+{par(mfrow = c(1,2))
+rpart.plot(model_tree_gini, type = 4, main = "Gini Impurity")
+rpart.plot(model_tree_info, type = 4, main = "Information Gain")}
+
+# Print models
+print(model_tree_gini)
+print(model_tree_info)
+
+# Summarise models
+summary(model_tree_gini)
+summary(model_tree_info)
+
+
+```
+
+**Comments:** .
+Both Gini impurity and information gain produced identical decision trees in this case, with the same splitting criterion and resulting child nodes.
+
+```{r, include=FALSE}
+# Create png file to save plot
+ppi <- 600
+png("DT_GI_IG_ITmorefeatures.png", , width = 4*ppi, height = 4*ppi, res = ppi)
+{par(mfrow = c(1,2))
+rpart.plot(model_tree_gini, type = 4, main = "Gini Impurity")
+rpart.plot(model_tree_info, type = 4, main = "Information Gain")}
+dev.off()
+```
+
+# 6. Create RF
+
+### 6.1. Fit Random forest model
+
+```{r}
+# Random Forest ----------------------------------
+metric <- "ROC"
+control <- trainControl(method = "repeatedcv",
+                        number = 5, # number of folds
+                        repeats = 3, # number of repetitions
+                        summaryFunction = twoClassSummary,
+                        classProbs = TRUE,
+                        savePredictions = TRUE)
+
+# Learn Random Forest (rf)
+set.seed(seed)
+model_RF <- train(target ~ .,
+                  data = train_set,
+                  method = "rf",  # Random Forests
+                  metric = metric,
+                  trControl = control)
+
+
+
+# Inspect model:---------------------------------------------------
+print(model_RF)
+
+# Check mtry parameter used for trained model
+# getModelInfo(model_RF)$rf$parameters
+print(model_RF$results$mtry)
+
+
+# Plot ROC vs used parameters for model
+plot(model_RF, main = "Random Forest")
+
+
+
+```
+
+**Comments:**
+
+. Although Sensitivity value was good, ROC and Specificity values was very poor.
+. Despite being able to detect true positives (costumers who did not buy again), it fails to detect true negatives (costumers who bought again).
+
+### 6.2. Validate results with a Confusion Matrix
+
+```{r}
+
+# Validate results with a Confusion Matrix --------------------------------
+
+# Estimate performance of Random Forest on the TEST dataset
+predictions_prob <- predict(model_RF, test_set, type = "prob")
+head(predictions_prob)
+
+predictions_raw <- predict(model_RF, test_set, type = "raw")
+head(cbind(predictions_prob, predictions_raw))
+
+
+# Confusion Matrix
+confusionMatrix(data = predictions_raw,
+                reference = test_set$target)
+
+```
+
+**Comments:** .
+Confusion matrix - The model was able to predict correctly the costumers who did not return again in 8327 out of 8327 total cases.
+. Validation - Good Accuracy and Sensitivity values, but low Specificity value.
+. Despite being able to detect true positives (costumers who did not buy again), it fails to detect true negatives (costumers who bought again).
+. The model might be biased towards the majority class, resulting from class imbalance.
+
+### 6.3. Plot
+
+```{r}
+
+par(mfrow = c(1, 2))
+pROC::plot.roc(x = test_set$target,
+         predictor = predictions_prob$returned,
+         main = paste0(control$repeats, "x ", control$number, "-fold CV | Returned | ", model_RF$method),
+         print.auc = TRUE)
+
+pROC::plot.roc(x = test_set$target,
+         predictor = predictions_prob$not_returned,
+         main = paste0(control$repeats, "x ", control$number, "-fold CV | Not returned | ", model_RF$method),
+         print.auc = TRUE)
+par(mfrow = c(1, 1))
+```
+
+**Comments:** .
+Returned - AUC was very poor.
+. Not returned - AUC value shows that model's performance is worse than random guessing.
+
+# 7. Oversampling method for returned customers
+
+### 7.1. Apply SMOTE for imbalanced data
+
+```{r}
+# Since we have high imbalanced data, we will try to use an oversampling approach on the minority class
+
+# Apply SMOTE technique
+data_train_smote <- SMOTE(X = train_set[,-1], 
+                          target = train_set[,1], 
+                          K = 5,
+                          dup_size = 30) 
+# K - number of nearest neighbors to consider when generating synthetic samples
+# dup_size - number of number of synthetic samples to generate for each minority class instance
+                          
+
+data_train_smote <- data_train_smote$data # extract only the balanced dataset
+data_train_smote$class <- as.factor(data_train_smote$class)
+
+# Check class distribution after applying SMOTE
+
+prop.table(table(data_train_smote$class))
+
+```
+
+**Comments:** .
+After SMOTE we get a 67/33 distribution for not returned/returned customers.
+
+# 8. Create DT for oversampling data
+
+### 8.1. Fit Decision Tree model using oversampling data
+
+```{r}
+
+
+#' Model Decision Tree from Rpart using oversampling data
+model_tree_smote <- rpart(class ~ ., data = data_train_smote) 
+print(model_tree_smote)
+
+#' View decision tree
+rpart.plot(model_tree_smote,
+           main = "Decision Tree for target with SMOTE") 
+
+```
+
+**Comments:** .
+. Order Delivery Impact: The number of orders delivered influences return likelihood, with certain thresholds, like \>= 2 delivered orders indicating higher return rates.
+Customer State Influence: The state of the customer, being from SP seems to influence customers return.
+Product Frequency and Recensy Impact: The frequency of a product's purchase (denoted as 'F') and recency (R) affects return likelihood, with F \> 2 and R > 1 leading to customers return.
+
+```{r, include = FALSE}
+# Create png file to save plot
+ppi <- 600
+png("DT_SMOTE_ITmorefeatures.png", width = 4*ppi, height = 4*ppi, res = ppi)
+rpart.plot(model_tree_smote, main = "Decision Tree for target with SMOTE")
+dev.off()
+
+```
+
+### 8.2. Validate results with a Confusion Matrix
+
+```{r}
+
+#' Calculate model predictions on TEST set
+prediction.dt_smote <- predict(model_tree_smote,
+                         test_set,
+                         type = "class") 
+head(prediction.dt_smote)
+
+test_set$prediction <- prediction.dt_smote 
+
+head(prediction.dt_smote)
+
+confusionMatrix(data = prediction.dt_smote,
+                reference = test_set$target)
+
+```
+
+**Comments:** .
+Confusion matrix - The model was able to predict correctly the costumers who did not buy again in 8327 out of 8327 total cases.
+. Despite being able to detect true positives (costumers who did not buy again), it fails to detect true negatives (costumers who bought again).
+
+### 8.3. Compare Gini Impurity vs Information Gain
+
+```{r}
+
+# Compare Gini Impurity vs Information Gain -------------------------------
+
+# Learn tree with Gini Impurity
+model_tree_gini_smote <- rpart(class ~.,
+                         data = data_train_smote,
+                         parms = list(split = "gini"))
+
+# Learn tree with Information Gain
+model_tree_info_smote <- rpart(class ~.,
+                         data = data_train_smote,
+                         parms = list(split = "information"))
+
+```
+
+### 8.4. Plot trees
+
+```{r}
+
+{par(mfrow = c(1,2))
+rpart.plot(model_tree_gini_smote, type = 4, main = "Gini Impurity w smote")
+rpart.plot(model_tree_info_smote, type = 4, main = "Information Gain w smote")}
+
+# Print models
+print(model_tree_gini_smote)
+print(model_tree_info_smote)
+
+# Summarise models
+summary(model_tree_gini_smote)
+summary(model_tree_info_smote)
+
+
+```
+
+**Comments:** .
+. Gini impurity and information gain produced different decision trees.
+. For Gini impurity the predictors variables Recency (R) >=2 and customer state from SP seems to be effective at distinguishing between the classes. Recency plays an important factor on predicting customers return.
+. For Information Gain the predictor variable recency (R) >= 1 & < 4 seems to be effective at distinguishing between the classes.
+
+```{r, include=FALSE}
+# Create png file to save plot
+ppi <- 600
+png("DT_GI_IG_ITsmotemorefeatures.png", , width = 4*ppi, height = 4*ppi, res = ppi)
+{par(mfrow = c(1,2))
+rpart.plot(model_tree_gini_smote, type = 4, main = "Gini Impurity w smote")
+rpart.plot(model_tree_info_smote, type = 4, main = "Information Gain w smote")}
+dev.off()
+```
+
+# 9. Create RF
+
+### 9.1. Fit Random forest model
+
+```{r}
+# Random Forest ----------------------------------
+metric <- "ROC"
+control_smote <- trainControl(method = "repeatedcv",
+                        number = 5, # number of folds
+                        repeats = 3, # number of repetitions
+                        summaryFunction = twoClassSummary,
+                        classProbs = TRUE,
+                        savePredictions = TRUE)
+
+# Learn Random Forest (rf)
+set.seed(seed)
+model_RF_smote <- train(class ~ .,
+                  data = data_train_smote,
+                  method = "rf",  # Random Forests
+                  metric = metric,
+                  trControl = control_smote)
+
+
+
+# Inspect model:
+print(model_RF_smote)
+
+# Check mtry parameter used for trained model
+# getModelInfo(model_RF)$rf$parameters
+print(model_RF_smote$results$mtry)
+
+
+# Plot ROC vs used parameters for model
+plot(model_RF_smote, main = "Random Forest")
+
+
+
+```
+
+**Comments:**
+
+. With 5-fold cross validation, the RF model showed good values for Sensitivity, ROC and Specificity.
+. Best mtry found was 2.
+
+### 9.2. Validate results with a Confusion Matrix
+
+```{r}
+
+# Validate results with a Confusion Matrix --------------------------------
+
+# Estimate performance of Random Forest on the TEST dataset
+predictions_prob_smote <- predict(model_RF_smote, test_set, type = "prob")
+head(predictions_prob_smote)
+
+predictions_raw_smote <- predict(model_RF_smote, test_set, type = "raw")
+head(cbind(predictions_prob_smote, predictions_raw_smote))
+
+
+# Confusion Matrix
+conf_matrix_rfsmote <- confusionMatrix(data = predictions_raw_smote,
+                reference = test_set$target)
+
+
+# Extract the confusion matrix table
+conf_matrix_table_rfsmote <- as.data.frame(conf_matrix_rfsmote$table)
+conf_matrix_table_rfsmote
+  
+
+```
+
+**Comments:** .
+Confusion matrix - The model was able to predict correctly the costumers who did not return again in 8319 out of 8327 total cases.
+. Validation - Good Accuracy and Sensitivity values, but low Specificity value.
+. Despite being able to detect true positives (costumers who did not buy again), it fails to detect true negatives (costumers who bought again).
+. The model might be over-fitted.
+
+### 9.3. Plot
+
+```{r}
+
+par(mfrow = c(1, 2))
+pROC::plot.roc(x = test_set$target,
+         predictor = predictions_prob_smote$returned,
+         main = paste0(control_smote$repeats, "x ", control_smote$number, "-fold CV | Returned | ", model_RF_smote$method),
+         print.auc = TRUE)
+
+pROC::plot.roc(x = test_set$target,
+         predictor = predictions_prob_smote$not_returned,
+         main = paste0(control_smote$repeats, "x ", control_smote$number, "-fold CV | Not returned | ", model_RF_smote$method),
+         print.auc = TRUE)
+par(mfrow = c(1, 1))
+```
+
+**Comments:** .
+. Returned - AUC was very poor.
+. Not returned - AUC value was very poor.
+
+# 10. SVM
+
+### 10.1. Define SVM algorithm for imbalanced data
+
+```{r}
+
+set.seed(seed)
+svm.imbdata.radial <- svm(target ~ .,
+                   data = train_set,
+                   kernel = "radial")
+
+# summary
+summary(svm.imbdata.radial)
+
+```
+
+**Comments:** .
+All 4 kernels were used for SVM method, giving similar results.
+We chose to represent only the "radial" kernel.
+
+### 10.2. Validate results with a Confusion Matrix
+
+```{r}
+
+# Predictions
+svm.imbdata.pred.radial <- predict(svm.imbdata.radial, test_set)
+
+# Confusion Matrix
+confusionMatrix(data = svm.imbdata.pred.radial,
+                reference = test_set$target)
+
+```
+
+**Comments:** .
+Confusion matrix - The model was able to predict correctly the costumers who did not buy again in 8327 out of 8327 total cases.
+. Validation - Good Accuracy and Sensitivity values, but low Specificity value.
+. Despite being able to detect true positives (costumers who did not buy again), it fails to detect true negatives (costumers who bought again).
+. The model might be biased towards the majority class, resulting from class imbalance.
+
+### 10.3. Define SVM algorithm for oversampling data
+
+```{r}
+
+# Define SVM algorithm using oversampling data
+
+# Linear kernel
+set.seed(seed)
+svm.smote.lin <- svm(class ~ .,
+                   data = data_train_smote,
+                   kernel = "linear",
+                   class.weights= c('not_returned'= 1, 'returned' = 1.4))
+
+# Polynomial kernel
+set.seed(seed)
+svm.smote.poly <- svm(class ~ .,
+                   data = data_train_smote,
+                   kernel = "polynomial",
+                   class.weights= c('not_returned'= 1, 'returned' = 1.4))
+
+# Radial kernel
+set.seed(seed)
+svm.smote.rad <- svm(class ~ .,
+                   data = data_train_smote,
+                   kernel = "radial",
+                   class.weights= c('not_returned'= 1, 'returned' = 1.4))
+
+# Sigmoid kernel
+set.seed(seed)
+svm.smote.sig <- svm(class ~ .,
+                   data = data_train_smote,
+                   kernel = "sigmoid",
+                   class.weights= c('not_returned'= 1, 'returned' = 1.4))
+
+
+# summary
+summary(svm.smote.lin)
+summary(svm.smote.poly)
+summary(svm.smote.rad)
+summary(svm.smote.sig)
+
+```
+
+### 10.4. Validate results with a Confusion Matrix
+
+```{r}
+
+# Predictions
+svm.smote.pred.lin <- predict(svm.smote.lin, test_set)
+svm.smote.pred.poly <- predict(svm.smote.poly, test_set)
+svm.smote.pred.rad <- predict(svm.smote.rad, test_set)
+svm.smote.pred.sig <- predict(svm.smote.sig, test_set)
+
+# Get confusion matrix
+conf_matrix_smote_lin <- confusionMatrix(data = svm.smote.pred.lin,
+                               reference = test_set$target)
+
+conf_matrix_smote_poly <- confusionMatrix(data = svm.smote.pred.poly,
+                reference = test_set$target)
+
+conf_matrix_smote_rad <- confusionMatrix(data = svm.smote.pred.rad,
+                reference = test_set$target)
+
+conf_matrix_smote_sig <- confusionMatrix(data = svm.smote.pred.sig,
+                reference = test_set$target)
+
+# Extract the confusion matrix table
+conf_matrix_table_smote_lin <- as.data.frame(conf_matrix_smote_lin$table)
+conf_matrix_table_smote_poly <- as.data.frame(conf_matrix_smote_poly$table)
+conf_matrix_table_smote_rad <- as.data.frame(conf_matrix_smote_rad$table)
+conf_matrix_table_smote_sig <- as.data.frame(conf_matrix_smote_sig$table)
+
+conf_matrix_table_smote_lin
+conf_matrix_table_smote_poly
+conf_matrix_table_smote_rad
+conf_matrix_table_smote_sig
+
+```
+
+**Comments:** .
+Confusion matrix - .
+The linear model was able to predict correctly the costumers who did not buy again in 8107 out of 8327 total cases and costumers who did bought again in only 11 out of 131 total cases.
+. The polynomial model was was able to predict correctly the costumers who did not buy again in 8066 out of 8327 total cases and costumers who did bought again in only 6 out of 131 total cases .
+. The radial model was was able to predict correctly the costumers who did not buy again in 8232 out of 8327 total cases and costumers who did bought again in only 2 out of 131 total cases.
+. The sigmoid model was was able to predict correctly the costumers who did not buy again in 4919 out of 8327 total cases and costumers who did bought again in 63 out of 131 total cases.
+. The sigmoid model performed better on predicting customers which returned compared to previous ones.
+
+# 11. Compare different kernels of SVM and RF
+```{r}
+
+# metrics for RF
+recall_rfsmote <- conf_matrix_rfsmote$byClass["Sensitivity"]
+precision_rfsmote <- conf_matrix_rfsmote$byClass["Pos Pred Value"]
+f_value_rfsmote <- (2 * precision_rfsmote * recall_rfsmote) / (precision_rfsmote + recall_rfsmote)
+spec_rfsmote <- conf_matrix_rfsmote$byClass["Specificity"]
+
+# metrics for linear model
+recall_lin <- conf_matrix_smote_lin$byClass["Sensitivity"]
+precision_lin <- conf_matrix_smote_lin$byClass["Pos Pred Value"]
+f_value_lin <- (2 * precision_lin * recall_lin) / (precision_lin + recall_lin)
+spec_lin <- conf_matrix_smote_lin$byClass["Specificity"]
+
+# metrics for polynomial model
+recall_poly <- conf_matrix_smote_poly$byClass["Sensitivity"]
+precision_poly <- conf_matrix_smote_poly$byClass["Pos Pred Value"]
+f_value_poly <- (2 * precision_poly * recall_poly) / (precision_poly + recall_poly)
+spec_poly <- conf_matrix_smote_poly$byClass["Specificity"]
+
+# metrics for radial model
+recall_rad <- conf_matrix_smote_rad$byClass["Sensitivity"]
+precision_rad <- conf_matrix_smote_rad$byClass["Pos Pred Value"]
+f_value_rad <- (2 * precision_rad * recall_rad) / (precision_rad + recall_rad)
+spec_rad <- conf_matrix_smote_rad$byClass["Specificity"]
+
+# metrics for sigmoid model
+recall_sig <- conf_matrix_smote_sig$byClass["Sensitivity"]
+precision_sig <- conf_matrix_smote_sig$byClass["Pos Pred Value"]
+f_value_sig <- (2 * precision_sig * recall_sig) / (precision_sig + recall_sig)
+spec_sig <- conf_matrix_smote_sig$byClass["Specificity"]
+
+
+# Summarize in table
+
+models <- c("RF", "Linear", "Polynomial", "Radial", "Sigmoid")
+recall <- c(recall_rfsmote, recall_lin, recall_poly, recall_rad, recall_sig)
+precision <- c(precision_rfsmote, precision_lin, precision_poly, precision_rad, precision_sig)
+F1_value <- c(f_value_rfsmote, f_value_lin, f_value_poly, f_value_rad, f_value_sig)
+specificity <- c(spec_rfsmote, spec_lin, spec_poly, spec_rad, spec_sig)
+
+metrics_df <- data.frame(Model = models, Recall = recall, Precision = precision, F1_Value = F1_value, Specificity = specificity)
+metrics_df
+
+```
+```{r, include = FALSE}
+#write.csv(conf_matrix_table_smote_sig, "confusionmatrixsvmsigmoidsmote_itmorefeatures.csv", row.names = FALSE)
+#write.csv(metrics_df, "metrics_itmorefeatures.csv", row.names = FALSE)
+```
+
+
+**Comments:** .
+Both radial, polynomial and linear kernel's consistently demonstrated strong performance in identifying customers who will not return (positive class), with high recall, precision, and F1 score.
+However, the specificity is extremely low for all cases ( < 10%), indicating a higher rate of false positives (customers who actually returned but the model predicted they would not).
+
+. The sigmoid kernel exhibited a trade-off between sensitivity and specificity, with the lowest recall (59.07%) and F1 score (73.89%) among the models.
+While the specificity (48.09%) is higher compared to other models, indicating a lower rate of false positives, the challenges in capturing returning customers while maintaining precision are evident.
+
+obs: Recall = Sensitivity, Precision = Pos Pred Value, F1 = mean of precision and recall.
+Lower F1 score indicates that both false positives and false negatives are impacting the model’s performance.
+Specificity = Prediction True Negatives
+
+# 12. Overall Comment from this iteration
+
+Overall, the dataset is really imbalance in the proportion of cases in the target feature, and the features selected were not enough to obtain models (DT and RF) with an acceptable performance.
+The use of SMOTE technique for oversampling wasn’t effective on DT model, as specificity remained low.
+As for the RF model, the smote technique improved all metrics, including specificity, however, it seems that the RF model is over-fitted, due to failure on predictions of true negatives for the test set.
+The SVM model, together with SMOTE technique performed better in identifying returning customers (increase specificity).
+The SVM model with sigmoid kernel showed the best trade-off between between Recall and specificity, however with lower value for F1.

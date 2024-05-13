@@ -1,0 +1,377 @@
+---
+title: "K-Means - Iteration 3"
+output: html_notebook
+---
+# Iteration 3 - Discretized data
+
+```{r setup, include=FALSE} 
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+```
+
+
+## 1. Load Libraries
+```{r}
+if (!require(pacman)) install.packages("pacman")
+pacman::p_load(dplyr,factoextra, gridExtra, ggplot2,reshape2,cluster, RColorBrewer,tidyr)
+```
+
+## 2. Import necessary tables
+```{r}
+
+# import fct_features
+fct_features <- read.csv("fct_features.csv")
+head(fct_features)
+
+```
+
+## 3. EDA
+### 3.1. Check dataframe
+```{r}
+str(fct_features)
+```
+
+### 3.2 Summary
+```{r}
+summary(fct_features)
+```
+
+### 3.3 Missing values
+```{r}
+#There is no missing value
+colSums(is.na(fct_features)) %>% as.data.frame
+```
+**Comments:** No missing values were found. <br /> <br />
+
+
+### 3.4 Distribution of variables' values (Histogram)
+#### 3.4.1 fct_features
+```{r}
+ggplot(data=fct_features, aes(x=target)) +
+ geom_histogram(fill="steelblue", color="black", bin=40) +
+  ggtitle("Histogram of Target")
+
+ggplot(data=fct_features, aes(x=recency)) +
+  geom_histogram(fill="steelblue", color="black", bin=40) +
+  ggtitle("Histogram of Recency")
+
+ggplot(data=fct_features, aes(x=frequency)) +
+  geom_histogram(fill="steelblue", color="black", bin=40) +
+  ggtitle("Histogram of Frequency")
+
+ggplot(data=fct_features, aes(x=monetary)) +
+  geom_histogram(fill="steelblue", color="black", bin=40) +
+  ggtitle("Histogram of Monetary")
+```
+**Comments:** *Target* - The majority of costumers (> 40,000) did not buy again during 2018. *Recency* - Data is skewed to the right, with a peak of almost 6,000 costumers with orders around the last 40 days. There are also some isolated orders which were made in the last 440-460 days. *Frequency* - The majority of costumers (> 40,000) only buying once in 2008. *Monetary* - Data is skewed to the right, with a peak of almost 25,000 costumers who spent < 250,000 reais.<br /> 
+
+
+### 3.5 Distribution of variables' values (Boxplot)
+#### 3.5.1 fct_features
+```{r}
+
+boxplot(fct_features$target,
+        ylab = "Order Target",
+        main="Target Boxplot")
+
+
+boxplot(fct_features$recency,
+        ylab = "Order Recency",
+        main="Recency Boxplot")
+
+
+boxplot(fct_features$frequency,
+        ylab = "Order Frequency",
+        main="Frequency Boxplot")
+
+
+boxplot(fct_features$monetary,
+        ylab = "Order Monetary",
+        main="Monetary Boxplot")
+```
+
+**Comments:** It is possible to confirm the skewness of data distribution observed in the histograms, and also the presence of outliers that vary from few observations (target, recency, and frequency) to an higg number (monetary). This can in turn influence the performance of Machine Learning (ML) algorithms.<br />
+
+
+### 3.6 Selecting RFM features only
+```{r}
+fct_rfm<- fct_features %>% select('recency','monetary','frequency')
+head(fct_rfm)
+```
+
+
+
+## 4.Standardizing features
+
+**Comments:** As the k-means algorithm is sensitive to the scale of the variables (more weight to variables with larger scales), was decided to discretize recency and monetary to help reduce this sensitivity, making the data more comparable with frequency <br /> <br />
+
+### 4.1 Using quartiles to create bins
+```{r}
+# Calculating quartiles to identify cut-off values
+quartiles_recency <- quantile(fct_rfm$recency, c(0, 0.25, 0.5, 0.75, 1))
+
+quartiles_monetary <-quantile(fct_rfm$monetary, c(0, 0.25, 0.5, 0.75, 1))
+
+data.frame(recency=quartiles_recency, monetary=quartiles_monetary %>% round(0))
+
+```
+
+### 4.2 Features' discretization 
+```{r}
+#We put the features as an integer so that it can be used in the model
+recency_trans<- 
+  cut(fct_features$recency, breaks = quartiles_recency, 
+      labels = c("1", "2", "3", "4"), include.lowest = TRUE) %>% as.integer()
+
+
+monetary_trans<- 
+  cut(fct_features$monetary, breaks = quartiles_monetary, 
+      labels = c("1", "2", "3", "4"), include.lowest = TRUE) %>% as.integer()
+```
+
+
+### 4.3 Creating new features and selecting them
+```{r}
+fct_rfm <- fct_rfm %>% mutate(
+  recency_disc=recency_trans,
+  monetary_disc=monetary_trans) %>% select('frequency','recency_disc','monetary_disc')
+head(fct_rfm)
+```
+
+### 4.4 Distribution of variables' values (Bar Plot)
+#### 4.4.1 Features discretized
+```{r}
+ggplot(data=fct_rfm, aes(x=recency_disc)) +
+  geom_bar(fill="steelblue", color="black", bin=40) +
+  ggtitle("Bar Plot of Recency Discretized")
+
+ggplot(data=fct_rfm, aes(x=frequency)) +
+  geom_bar(fill="steelblue", color="black", bin=40) +
+  ggtitle("Bar Plot of Frequency")
+
+ggplot(data=fct_rfm, aes(x=monetary_disc)) +
+  geom_bar(fill="steelblue", color="black", bin=40) +
+  ggtitle("Bar Plot of Monetary Discretized")
+```
+
+**Comments:** The discretized variables show approximately the same number of observations, while the frequency variable shows a greater number of observations in class 1 <br /> <br />
+
+### 4.5 Distribution of variables' values (Boxplot)
+#### 4.5.1 Features discretized
+```{r}
+boxplot(fct_rfm$recency_disc,
+        ylab = "Order Recency",
+        main="Recency Discretized Boxplot")
+
+boxplot(fct_rfm$monetary_disc,
+        ylab = "Order Monetary",
+        main="Monetary Discretized Boxplot")
+```
+**Comments:** Outliers were removed from the transformed variables <br /> <br />
+
+## 5. Sampling
+```{r}
+#We going to use more than 10% dataset in our sample
+seed<-1234
+set.seed(seed) 
+
+features_sample <- sample_n(fct_rfm, 5000)
+head(features_sample)
+```
+
+
+## 6.Determine Number of Clusters
+
+### 6.1 "Elbow method"
+```{r}
+elbow_plot<- factoextra::fviz_nbclust(features_sample, kmeans, method = "wss")
+
+elbow_plot
+```
+
+**Comments:** 4 clusters <br /> <br />
+
+### 6.2 "Silhouette-score method"
+```{r}
+silhouette_plot <- factoextra::fviz_nbclust(features_sample, kmeans, method = "silhouette")
+
+silhouette_plot 
+```
+**Comments:** 10 clusters <br /> <br />
+
+### 6.3 "Gap Statistic Method"
+```{r}
+gap_plot<-factoextra::fviz_nbclust(features_sample, kmeans, method = "gap_stat")
+
+gap_plot 
+```
+
+**Comments:** 3 clusters <br /> <br />
+
+### 6.4.Comparing k recommendations
+#### 6.4.1 Using samples to perform k-means
+```{r}
+kmeans_sample_3 <- kmeans(features_sample, centers = 3)
+kmeans_sample_4 <- kmeans(features_sample, centers = 4)
+kmeans_sample_10 <- kmeans(features_sample, centers = 10)
+```
+
+
+
+#### 6.4.2 Use inertia and the silhouette score to analyse k recommendations
+##### 6.4.2.1 Calculate the inertia (within-cluster sum of squares) for each model
+```{r}
+inertia_kmeans_sample_3 <- kmeans_sample_3$tot.withinss
+inertia_kmeans_sample_4 <- kmeans_sample_4$tot.withinss
+inertia_kmeans_sample_10 <- kmeans_sample_10$tot.withinss
+
+```
+
+
+
+##### 6.4.2.2 Calculate the silhouette score for each model
+```{r}
+silhouette_kmeans_sample_3 <- silhouette(kmeans_sample_3$cluster, dist(features_sample))
+silhouette_kmeans_sample_4 <- silhouette(kmeans_sample_4$cluster, dist(features_sample))
+silhouette_kmeans_sample_10 <- silhouette(kmeans_sample_10$cluster, dist(features_sample))
+```
+
+
+#### 6.4.3 Results
+```{r}
+cat("Inertia - 3 clusters:", inertia_kmeans_sample_3)
+cat("Inertia - 4 clusters:", inertia_kmeans_sample_4)
+cat("Inertia - 10 clusters:", inertia_kmeans_sample_10)
+
+cat("Silhouette score - 3 clusters:", mean(silhouette_kmeans_sample_3[, "sil_width"]))
+cat("Silhouette score - 4 clusters:", mean(silhouette_kmeans_sample_4[, "sil_width"]))
+cat("Silhouette score - 10 clusters:", mean(silhouette_kmeans_sample_10[, "sil_width"]))
+```
+**Comments:** Based on the previous analysis, K=3 inertia value is higher and the silhouette score is lower - not chosen. So, was chosen k=10 because it has a much smaller inertia value than k=4 and only a slightly lower score. <br /> <br />
+
+### 6.5 Define number of clusters 
+```{r}
+
+k_clusters <- which(silhouette_plot$data$y == max(silhouette_plot$data$y))
+
+k_clusters
+```
+
+
+## 7. Apply K-means algorithm
+```{r}
+set.seed(seed) 
+fit.kmeans <- kmeans(fct_rfm, centers = k_clusters)
+
+fit.kmeans
+```
+
+
+## 8. Visualization clusters
+```{r}
+factoextra::fviz_cluster(fit.kmeans, data = fct_rfm) 
+```
+
+
+## 9. Create a segmentation with 10 clusters
+```{r}
+#Create a column 
+fct_features$cluster <- fit.kmeans$cluster
+
+#How many customers in each cluster?
+table(fct_features$cluster)
+
+#Dataset with iteration segmentation.
+fct_features %>% select('customer_unique_id','cluster') %>% head()
+
+```
+
+## 10. Table with cluster means x features
+```{r}
+centers<-data.frame(fit.kmeans$centers)
+centers
+```
+
+## 11.Ploting clusters means
+```{r}
+#Create cluster column
+centers$cluster<-as.numeric(1:10)
+
+#Cluster column first of all
+centers <- centers[, c("cluster", names(centers)[-which(names(centers) == "cluster")])]
+
+#Rename columns
+names(centers)[1:4] <-  c("Cluster", "Frequency", "Recency", "Monetary")
+
+#Transform in pivot longer
+df_long <- pivot_longer(centers, cols = -Cluster, names_to = "Feature", values_to = "Value")
+
+
+ggplot(df_long, aes(x = Feature, y = Value, group = Cluster, color = as.factor(Cluster))) +
+  geom_line() +
+  geom_point() +
+  labs(x = "Features", y = "Cluster Means", title = "Customer Segmentation",color = "Cluster") +
+  scale_color_brewer(palette = "Paired")+
+  theme_minimal()
+
+
+```
+
+
+```{r, include = FALSE}
+# Create png file to save plot
+ppi <- 600
+png("Customers_segmentation.png", width = 10*ppi, height = 6*ppi, res = ppi)
+par(mfrow=c(1,3))
+
+{
+barplot(centers$recency,
+        main = "Recency",
+        xlab = "Clusters",
+        ylab = "Cluster means",
+        names.arg = c("1", "2","3","4","5","6","7","8","9","10"),
+        col = brewer.pal(10, "Set2"),
+        horiz = FALSE)
+
+barplot(centers$monetary,
+        main = "Monetary",
+        xlab = "Clusters",
+        ylab = "Cluster means",
+        names.arg = c("1", "2","3","4","5","6","7","8","9","10"),
+        col = brewer.pal(10, "Set2"),
+        horiz = FALSE)
+
+barplot(centers$frequency,
+        main = "Frequency",
+        xlab = "Clusters",
+        ylab = "Cluster means",
+        names.arg = c("1", "2","3","4","5","6","7","8","9","10"),
+        col = brewer.pal(10, "Set2"),
+        horiz = FALSE)
+}
+```
+
+## 12. Iteration Conclusions
+- In this iteration, was decided to discretize the variables in order to reduce the model's sensitivity to variables with larger scales and, to try obtain a better frequency differentiation. To do this, was used the quartile values;<br />
+- According to k recommendations analysis, was opted to use a k=10. However, compared to the last iteration, the inertia value of k selected increased, suggesting the data points within each cluster are less close to their respective centroids. On the other hand, the silhouette score increased, i.e, the data points are better well-matched to its assigned cluster;<br />
+- Thus, with k=10 was possible to conclude:<br />
+  - A discrepancy in the value of clusters compared to previous iterations;<br />
+  - Better general customer segmentation, specially in terms of frequency;<br />
+  - Better understanding of the most and least valuable groups and the strategies to apply to each:<br />
+    - Cluster 1 - Peekaboo - campaigns that increase the frequency of orders and decrease the time since the last one;<br />
+    - Cluster 2 - Opportunity seekers - focus on increasing the amount spent and decreasing the time since the last order;<br />
+    - Cluster 3 - New peekaboo - campaigns to keep recency low and increase frequency;<br />
+    - Cluster 4 - Curious - new customers - spend little and only a few times - boost the number of orders and increase the amount invested;<br />
+    - Cluster 5 - Almost lost - not as bad as cluster 10, but working towards the same goal;<br />
+    - Cluster 6 - New golden goose - more recent buyers, with high values - focus on the number of orders (they only place a few);<br />
+    - Cluster 7 - Golden goose - more loyal customers - we care campaigns;<br />
+    - Cluster 8 - Former golden goose - campaigns to turn them into golden goose, preventing them from becoming almost lost;<br />
+    - Cluster 9 - Underdogs - focus on reducing the time since their last order - they have everything it takes to become golden goose;<br />
+    - Cluster 10 - Uninterested/lost - campaigns that work on all the RFM components;<br />
+- In this iteration, was possible to differentiate the clusters in great detail with regard to their behavior in relation to the RFM variables, specially in terms of frequency.
+    
+  
+  
+  
+
+
+
