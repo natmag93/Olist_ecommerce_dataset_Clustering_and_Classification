@@ -2,6 +2,7 @@
 Customer Clustering & Classification
 
 This project focuses on leveraging data science techniques to analyze a brazilian e-commerce dataset. Primary objectives were: first, to cluster clients based on their purchasing behavior, and second, to classify customers likely to return.
+This was a project done for a postgrad in Data Science.
 
 ## Dataset
 This dataset was provided by Olist, which was made publicly accessible on kaggle.com. The dataset has information of 100,000 orders from 2016 to 2018 made at multiple marketplaces in Brazil. Its features allow you to evaluate an order from a variety of perspectives, including order status, pricing, payment, and freight performance, as well as customer location, product qualities, and customer feedback.
@@ -69,8 +70,11 @@ The prediction of customers return could also be carried out using different cla
 ## Authors
 
 Francisco Leite
+
 Gonçalo Silva
+
 [Natalia Magalhaes](https://github.com/natmag93)
+
 [Zita Martins](https://github.com/zitasamartins)
 
 
