@@ -69,9 +69,9 @@ The prediction of customers return could also be carried out using different cla
 
 ## Authors
 
-Francisco Leite
+[Francisco Leite](https://github.com/fransile)
 
-Gonçalo Silva
+[Gonçalo Silva](https://github.com/PrimoLucasPt)
 
 [Natalia Magalhaes](https://github.com/natmag93)
 
